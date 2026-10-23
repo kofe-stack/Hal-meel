@@ -1,0 +1,57 @@
+name: Build HalMeel APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo and EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Build APK with Expo EAS
+        run: eas build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK
+        run: |
+          mkdir -p apk
+          eas build:list \
+            --platform android \
+            --status finished \
+            --limit 1 \
+            --json > build.json
+
+          APK_URL=$(node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('build.json', 'utf8'));
+            console.log(data[0].artifacts.buildUrl);
+          ")
+
+          curl -L "$APK_URL" -o apk/HalMeel.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HalMeel-Android-APK
+          path: apk/HalMeel.apk
+          retention-days: 30
